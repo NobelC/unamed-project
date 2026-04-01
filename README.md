@@ -15,13 +15,13 @@ El sistema se basa en una modularidad total, donde cada capa es reemplazable e i
 🛠️ Estándares de Desarrollo
 1. Nomenclatura y Estilo
 
-    Variables y Funciones (Python): Se debe utilizar snake_case (ej. update_mastery_probability).
+    **Variables y Funciones (Python)**: Se debe utilizar snake_case (ej. update_mastery_probability).
    
-    Clases: Se debe utilizar PascalCase (ej. BKTModel).
+    **Clases:** Se debe utilizar PascalCase (ej. BKTModel).
 
-    Constantes: Se definen en UPPER_CASE (ej. MAX_SRS_PERCENTAGE).
+    **Constantes:** Se definen en UPPER_CASE (ej. MAX_SRS_PERCENTAGE).
 
-    Tipado: En Python es obligatorio el uso de Type Hinting para asegurar la claridad técnica.
+    **Tipado:** En Python es obligatorio el uso de Type Hinting para asegurar la claridad técnica.
 
 3. Documentación y Comentarios
 
