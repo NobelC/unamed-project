@@ -55,7 +55,7 @@ jobs:
             python3-pip \
             libsqlite3-dev
 
-      - name:  Configurar cache de CMake
+      - name:  Configurar caché de CMake
         uses: actions/cache@v4
         with:
           path: |
@@ -112,16 +112,27 @@ jobs:
           cache: 'pip'
           cache-dependency-path: 'requirements.txt'
 
+      - name:  Configurar Node.js 20 (para pyright)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
       - name:  Instalar dependencias Python
         run: |
           python -m pip install --upgrade pip setuptools wheel
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
-          # Herramientas de calidad de código (siempre instalar)
-          pip install pytest ruff pyright
+          pip install pytest ruff
 
-      - name:  Lint con Ruff (non-blocking para warnings)
+      - name:  Instalar pyright globalmente vía npm
+        run: |
+          echo "🔧 Instalando pyright..."
+          npm install -g pyright@latest
+          echo " pyright versión: $(pyright --version)"
+
+      - name:  Lint con Ruff (non-blocking)
         run: |
           if [ -d "frontend" ]; then
             python -m ruff check frontend/ --exit-zero \
@@ -130,16 +141,17 @@ jobs:
             echo " Directorio frontend/ no encontrado, skipping lint"
           fi
 
-      - name:  Type check con Pyright
+      - name:  Type check con Pyright (non-blocking)
         run: |
           if [ -d "frontend" ]; then
-            python -m pyright frontend/ --skipunannotated \
+            # Ejecutar pyright directo (herramienta Node.js, no módulo Python)
+            pyright frontend/ --skipunannotated \
               || echo " Pyright encontró issues de tipado (no bloqueantes en CI)"
           else
             echo " Directorio frontend/ no encontrado, skipping type check"
           fi
 
-      - name:  Ejecutar tests de Python
+      - name:  Ejecutar tests de Python (allow empty)
         run: |
           if [ -d "frontend/tests" ] && [ "$(ls -A frontend/tests 2>/dev/null)" ]; then
             python -m pytest frontend/tests/ \
@@ -151,15 +163,6 @@ jobs:
             echo " No hay tests en frontend/tests/, skipping pytest"
             exit 0
           fi
-
-      - name:  Subir reporte de cobertura (opcional)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-test-results
-          path: frontend/.pytest_cache/
-          retention-days: 7
-          if-no-files-found: ignore
 
   # =============================================================================
   # JOB 3: Construir y Publicar Imagen Docker (SOLO en releases)
