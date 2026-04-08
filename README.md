@@ -26,7 +26,7 @@ HESTIA opera en **dos dimensiones de adaptación simultáneas**, algo que ningun
 - Motor MAB/UCB para selección de método pedagógico (Visual, Auditivo, Kinestésico, Fonético, Global)
 - Persistencia local con SQLite (sin servidor, sin riesgo de filtración)
 - Interfaz desktop funcional con Python + TKinter
-- Vocales A–U y Números 1–10
+- Alfabetizacion y matematica/logica basica
 - Simulador Monte Carlo + Bot de estrés para validación teórica
 - Reporte de sesión al docente
 
