@@ -22,14 +22,17 @@ COPY requirements.txt /tmp/
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 # LSPs Python
-RUN pip install python-lsp-server "pylsp[all]" pyright
-
+RUN pip install "python-lsp-server[all]" pyright
 # Crear usuario dev
 RUN useradd -m -s /bin/bash dev && echo "dev:dev" | chpasswd
 RUN echo "dev ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+COPY .devcontainer/setup.sh /home/dev/setup.sh
+RUN chmod +x /home/dev/setup.sh && \
+    chown dev:dev /home/dev/setup.sh  # Asegurar propiedad correcta
+
 USER dev
 WORKDIR /workspace
 
-# Copiar script de inicialización
-COPY .devcontainer/setup.sh /home/dev/setup.sh
-RUN chmod +x /home/dev/setup.sh
+CMD ["bash", "-c", "if [ ! -f /home/dev/.initialized ]; then /home/dev/setup.sh && touch /home/dev/.initialized; fi; tail -f /dev/null"]
+
