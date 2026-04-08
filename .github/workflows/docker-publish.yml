@@ -65,10 +65,10 @@ jobs:
         run: ruff check frontend/
 
       - name: Type check with Pyright
-        run: pyright frontend/
+        run: python -m pyright frontend/
 
       - name: Run Python tests
-        run: pytest frontend/tests/ -v --tb=short || echo "⚠️ Tests de UI requieren entorno gráfico"
+        run: pytest frontend/tests/ -v --tb=short || echo "Tests de UI requieren entorno gráfico"
 
   # ═══════════════════════════════════════════════════════════
   # JOB 3: Construir imagen Docker (solo en releases)
