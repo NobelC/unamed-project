@@ -26,7 +26,7 @@ namespace hestia::bkt {
     
     //Trackeo temporal
     std::chrono::system_clock::time_point last_practice_time{};
-    std::chrono::system_clock::time_point session_start_time{};
+    std::chrono::steady_clock session_start_time{};
     
     //Metricas de rendimiento
     uint32_t total_attempts{0};
