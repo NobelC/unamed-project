@@ -27,7 +27,8 @@ namespace hestia::bkt {
     }
 
     void applyForgetFactor(SkillState& state) noexcept{
-      if(state.last_practice_time >= )
+      if(state.exceedsForgetThreshold()){
+      }
     } 
 }
 
