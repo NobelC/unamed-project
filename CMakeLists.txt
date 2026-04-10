@@ -21,9 +21,8 @@ if(BUILD_TESTS)
         GIT_TAG        v3.4.0  # Versión estable reciente
     )
     FetchContent_MakeAvailable(Catch2)
+    enable_testing()
 endif()
-
-enable_testing()
 
 # Subdirectorio principal (Backend)
 add_subdirectory(backend)

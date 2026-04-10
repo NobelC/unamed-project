@@ -3,6 +3,13 @@
 #include <cmath>
 
 namespace hestia::bkt {
+    void updateTransitionDecay(SkillState& state, double lambda) noexcept{
+      std::chrono::duration<double> duration = std::chrono::system_clock::now() - state.session_start_time; 
+      using minute_double_cast = std::chrono::duration<double, std::ratio<60>>;
+      double minutes_total = std::chrono::duration_cast<minute_double_cast>(duration).count();
+      state.m_pTransition = state.m_pTransition * std::exp((-lambda) * minutes_total);
+    } 
+
     constexpr double calculatePosterior(const SkillState& state, bool is_correct) noexcept {
       double pL = state.m_pLearn_operative;
       double s = state.m_pSlip;
@@ -66,8 +73,17 @@ namespace hestia::bkt {
     //======================================================================================================================
     //======================================================================================================================
 
-    void updateKnowledge(SkillState& state, bool is_correct, double response_time_ms) noexcept {
+    void updateKnowledge(SkillState& state, bool is_correct, double response_time_ms, double lambda) noexcept {
       state.total_attempts++;
+
+      if(state.isColdStart()){
+        state.is_initialized = true;
+        state.avg_response_time_ms = response_time_ms;
+      }
+      else{
+        state.avg_response_time_ms = state.avg_response_time_ms + (response_time_ms - state.avg_response_time_ms) / state.total_attempts;
+        updateTransitionDecay(state,lambda);
+      }
 
       double pL_posterior = calculatePosterior(state, is_correct);
       double pL_new = calculateTransition(pL_posterior, state.m_pTransition);
@@ -90,13 +106,7 @@ namespace hestia::bkt {
         state.consecutive_correct = 0;
       }
 
-      if(state.isColdStart()){
-        state.is_initialized = true;
-        state.avg_response_time_ms = response_time_ms;
-      }
-      else{
-        state.avg_response_time_ms = state.avg_response_time_ms + (response_time_ms - state.avg_response_time_ms) / state.total_attempts;
-      }
+
       state.last_practice_time = std::chrono::system_clock::now();
       state.validationProbabilityRanges();
     }
