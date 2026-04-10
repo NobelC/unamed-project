@@ -1,34 +1,112 @@
 #include "../include/BKTEngine.hpp"
 #include <chrono>
+#include <cmath>
 
 namespace hestia::bkt {
-    void UpdateKnowledge(SkillState& state, bool is_correct, double response_time_ms) noexcept{
-      state.total_attempts++;
-      if(!state.isColdStart() ){
-        state.is_initialized = true;
-        auto& last_state = state;
-        SkillState new_know_data = SkillState();
+    constexpr double calculatePosterior(const SkillState& state, bool is_correct) noexcept {
+      double pL = state.m_pLearn_operative;
+      double s = state.m_pSlip;
+      double g = state.m_pGuess;
 
-        if(is_correct){
-          new_know_data.m_pLearnOperative = (last_state.m_pLearnOperative * (1 - last_state.m_pSlip)) / 
-            ((last_state.m_pLearnOperative * (1 - last_state.m_pSlip)) + ((1 - state.m_pLearnOperative) * (1 - state.m_pGuess)));  
-        }
-        else{
-          new_know_data.m_pLearnOperative = (last_state.m_pLearnOperative * last_state.m_pGuess) / 
-            ((last_state.m_pLearnOperative * last_state.m_pSlip) + ((1-last_state.m_pLearnOperative) * (1-last_state.m_pGuess)));
-        }
-
-        //Proceso de transicion
-        state.m_pTransition = new_know_data.m_pLearnOperative + (1.0 - new_know_data.m_pLearnOperative) * last_state.m_pTransition;
-        state.last_practice_time = std::chrono::system_clock::now();
-
-        state.validationRangesData();
+      if (is_correct) {
+        return (pL * (1.0 - s)) / ((pL * (1.0 - s)) + ((1.0 - pL) * g));
+      } 
+      else {
+        return (pL * s) / ((pL * s) + ((1.0 - pL) * (1.0 - g)));
       }
+    }
+
+    [[nodiscard]] constexpr double calculateTransition(double pL_posterior, double pT) noexcept {
+      return pL_posterior + (1.0 - pL_posterior) * pT;
+    }
+
+    [[nodiscard]] constexpr double calculatePenalty(double time, double avg_time) noexcept {
+      double t_fast = avg_time;
+      double t_slow = avg_time * 2.0;
+      double w_min = 0.01;
+
+      if (time <= t_fast) return 1.0;
+      if (time >= t_slow) return w_min;
+
+      return 1.0 - ((time - t_fast) / (t_slow - t_fast)) * (1.0 - w_min); 
+    }
+
+    //==================================================================================================================
+    //==================================================================================================================
+
+    constexpr double calculatePosteriorTheorical(const SkillState& state, bool is_correct) noexcept {
+      double pL = state.m_pLearn_theorical;
+      double s = state.m_pSlip;
+      double g = state.m_pGuess;
+
+      if (is_correct) {
+        return (pL * (1.0 - s)) / ((pL * (1.0 - s)) + ((1.0 - pL) * g));
+      } 
+      else {
+        return (pL * s) / ((pL * s) + ((1.0 - pL) * (1.0 - g)));
+      }
+    }
+
+    [[nodiscard]] constexpr double calculateTransitionTheorical(double pL_posterior) noexcept {
+      double p_transition = P_TRANSITION_FLOOR;
+      return pL_posterior + (1.0 - pL_posterior) * p_transition;
+    }
+
+    [[nodiscard]] constexpr double calculatePenaltyTheorical(double time, double avg_time) noexcept {
+      double t_fast = avg_time;
+      double t_slow = avg_time * 2.0;
+      double w_min = 0.01;
+
+      if (time <= t_fast) return 1.0;
+      if (time >= t_slow) return w_min;
+
+      return std::pow(1.0 - ((time - t_fast) / (t_slow - t_fast)) * (1.0 - w_min),2); 
+    }
+
+    //======================================================================================================================
+    //======================================================================================================================
+
+    void updateKnowledge(SkillState& state, bool is_correct, double response_time_ms) noexcept {
+      state.total_attempts++;
+
+      double pL_posterior = calculatePosterior(state, is_correct);
+      double pL_new = calculateTransition(pL_posterior, state.m_pTransition);
+
+      double pL_posterior_theorical = calculatePosteriorTheorical(state,is_correct);
+      double pL_new_theorical = calculateTransitionTheorical(pL_posterior_theorical);
+
+      if (is_correct) {
+        double omega = calculatePenalty(response_time_ms, state.avg_response_time_ms);
+        double omega_theorical = calculatePenaltyTheorical(response_time_ms, state.avg_response_time_ms);
+        state.m_pLearn_operative = state.m_pLearn_operative + (pL_new - state.m_pLearn_operative) * omega;
+        state.m_pLearn_theorical = state.m_pLearn_theorical + (pL_new_theorical - state.m_pLearn_theorical) * omega_theorical;
+        state.consecutive_correct++;
+        state.consecutive_error = 0;
+      } 
+      else {
+        state.m_pLearn_operative = pL_new;
+        state.m_pLearn_theorical = pL_new_theorical;
+        state.consecutive_error++;
+        state.consecutive_correct = 0;
+      }
+
+      if(state.isColdStart()){
+        state.is_initialized = true;
+        state.avg_response_time_ms = response_time_ms;
+      }
+      else{
+        state.avg_response_time_ms = state.avg_response_time_ms + (response_time_ms - state.avg_response_time_ms) / state.total_attempts;
+      }
+      state.last_practice_time = std::chrono::system_clock::now();
+      state.validationProbabilityRanges();
     }
 
     void applyForgetFactor(SkillState& state) noexcept{
       if(state.exceedsForgetThreshold()){
+        state.m_pLearn_operative = (state.m_pLearn_operative * (1 - state.m_pForget)) + 
+          ((1 - state.m_pLearn_operative) * state.m_pTransition);
       }
-    } 
+      state.validationProbabilityRanges();
+    }     
 }
 
