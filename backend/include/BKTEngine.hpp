@@ -31,7 +31,7 @@ namespace hestia::bkt {
     
     //Trackeo temporal
     std::chrono::system_clock::time_point last_practice_time{};
-    std::chrono::steady_clock::time_point session_start_time{};
+    std::chrono::system_clock::time_point session_start_time{};
 
     uint32_t skill_id;
     uint32_t total_attempts{0};
@@ -74,7 +74,8 @@ namespace hestia::bkt {
     public:
       explicit BKTEngine() noexcept = default;
       //Actular estado tras cada respuesta del estudiante
-      void updateKnowledge(SkillState& state, bool is_correct, double response_time_ms) noexcept;
+      void updateTransitionDecay(SkillState& state, double lambda) noexcept;
+      void updateKnowledge(SkillState& state, bool is_correct, double response_time_ms, double lambda) noexcept;
       void applyForgetFactor(SkillState& state) noexcept;
   };
 }
