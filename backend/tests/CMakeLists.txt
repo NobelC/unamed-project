@@ -1,7 +1,10 @@
 # backend/tests/CMakeLists.txt
 
-# Crear el ejecutable de tests
-add_executable(hestia_tests test_BKTEngine.cpp)
+# Añadimos test_MABEngine.cpp a la lista de fuentes
+add_executable(hestia_tests 
+    test_BKTEngine.cpp
+    test_MABEngine.cpp 
+)
 
 target_link_libraries(hestia_tests 
     PRIVATE 
@@ -9,6 +12,7 @@ target_link_libraries(hestia_tests
         Catch2::Catch2WithMain
 )
 
-list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
+# Nota: Si usas Catch2 v3 instalado vía sistema (pacman), 
+# 'include(Catch)' suele funcionar directamente sin manipular CMAKE_MODULE_PATH.
 include(Catch)
 catch_discover_tests(hestia_tests)
