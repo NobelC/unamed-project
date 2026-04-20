@@ -44,7 +44,7 @@ PYBIND11_MODULE(hestia_core, m) {
         .export_values();
 
     py::class_<mab::MABEngine>(m_mab, "MABEngine")
-        .def(py::init<double>(), py::arg("epsilon") = 0.1);
+        .def(py::init<double>(), py::arg("exploration_c") = 1.0);
 
     // Módulo Zone
     py::module_ m_zone = m.def_submodule("zone", "Zone Module");
@@ -55,7 +55,7 @@ PYBIND11_MODULE(hestia_core, m) {
         .export_values();
 
     py::class_<zone::ZoneBlender>(m_zone, "ZoneBlender")
-        .def(py::init<int>(), py::arg("seed") = 0);
+        .def(py::init<uint64_t>(), py::arg("seed") = 0);
 
     // Módulo Graph
     py::module_ m_graph = m.def_submodule("graph", "Graph Module");
@@ -79,7 +79,8 @@ PYBIND11_MODULE(hestia_core, m) {
     // Módulo Persistence
     py::module_ m_persistence = m.def_submodule("persistence", "Persistence Module");
 
-    py::class_<persistence::PersistenceLayer>(m_persistence, "PersistenceLayer")
+    py::class_<persistence::PersistenceLayer, 
+               std::unique_ptr<persistence::PersistenceLayer>>(m_persistence, "PersistenceLayer")
         .def_static("create", &persistence::PersistenceLayer::create)
         // Ya no atamos init, pero debemos decirle a pybind11 que maneje unique_ptr
         .def("load_skill_state", [](persistence::PersistenceLayer& self, int student_id, int skill_id) {

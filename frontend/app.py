@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import sys
 import os
+from bridge.hestia_bridge import get_bridge, METHOD
 
 # Asegurar que el bridge sea importable
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -12,6 +13,11 @@ class HestiaApp:
         self.root.title("HESTIA — Sistema de Tutoría Inteligente")
         self.root.geometry("900x600")
         self.root.configure(bg="#1e1e2e")
+        
+        # Inicializar Bridge
+        self.bridge = get_bridge()
+        self.student_id = 1
+        self.current_skill_id = 0 # 'Vocal A' según skill_graph.json
 
         self.style = ttk.Style()
         self.style.theme_use('clam')
@@ -29,7 +35,7 @@ class HestiaApp:
 
         tk.Label(sidebar, text="HESTIA", font=("Inter", 16, "bold"), bg="#181825", fg="#89b4fa", pady=20).pack()
         
-        btn_style = {"bg": "#181825", "fg": "#cdd6f4", "activebackground": "#313244", "flat": True, "padx": 20, "pady": 10, "anchor": "w"}
+        btn_style = {"bg": "#181825", "fg": "#cdd6f4", "activebackground": "#313244", "relief": "flat", "padx": 20, "pady": 10, "anchor": "w"}
         tk.Button(sidebar, text="Dashboard", **btn_style, command=self.show_dashboard).pack(fill="x")
         tk.Button(sidebar, text="Ejercicios", **btn_style, command=self.show_exercises).pack(fill="x")
         tk.Button(sidebar, text="Progreso", **btn_style, command=self.show_progress).pack(fill="x")
@@ -81,10 +87,23 @@ class HestiaApp:
                       command=lambda o=opt: self.check_answer(o)).pack(side="left", padx=10)
 
     def check_answer(self, opt):
-        if opt == "8":
-            messagebox.showinfo("¡Correcto!", "¡Muy bien! Has ganado confianza en esta habilidad.")
+        is_correct = (opt == "8")
+        
+        # Procesar con el motor real vía Bridge
+        result = self.bridge.process_response(
+            self.student_id, 
+            self.current_skill_id, 
+            METHOD.VISUAL, 
+            is_correct, 
+            1500.0 # Tiempo mock
+        )
+
+        if is_correct:
+            messagebox.showinfo("¡Correcto!", 
+                f"¡Muy bien! P(L) actualizado a {result.current_pL:.2f}")
         else:
-            messagebox.showerror("Oops", "Casi. Inténtalo de nuevo, el motor HESTIA ajustará la dificultad.")
+            messagebox.showerror("Oops", 
+                f"Casi. El motor HESTIA ajustará la dificultad. P(L): {result.current_pL:.2f}")
 
     def show_progress(self):
         self.clear_main()

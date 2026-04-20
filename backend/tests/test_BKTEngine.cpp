@@ -95,9 +95,9 @@ TEST_CASE("Unit test for BKTEngine", "[Behavioral testing of variables]") {
   SECTION("Anti-stall: racha corta NO desbloquea") {
     hestia::bkt::SkillState test_state;
     test_state.is_initialized = true;
-    test_state.avg_response_time_ms = 1000.0;
-    test_state.m_pLearn_theorical = 0.21; // justo debajo del margen
+    test_state.m_pLearn_theorical = 0.21; 
     test_state.m_pLearn_operative = 0.20;
+    // Dif 0.01 < margen 0.05: NO incrementa m_sustained_theorical_dominance
     
     // Simulamos un par de aciertos (racha corta)
     for (int i = 0; i < 2; ++i) {
