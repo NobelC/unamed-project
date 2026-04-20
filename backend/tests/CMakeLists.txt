@@ -1,9 +1,11 @@
 # backend/tests/CMakeLists.txt
 
-# Añadimos test_MABEngine.cpp a la lista de fuentes
 add_executable(hestia_tests 
     test_BKTEngine.cpp
-    test_MABEngine.cpp 
+    test_MABEngine.cpp
+    test_SRSQueue.cpp
+    test_ZoneBlender.cpp
+    test_PersistenceLayer.cpp
 )
 
 target_link_libraries(hestia_tests 

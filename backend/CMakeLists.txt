@@ -22,7 +22,7 @@ target_compile_features(hestia_backend PUBLIC cxx_std_20)
 
 # Enlazar SQLite si usas PersistenceLayer (necesario en Linux)
 find_package(SQLite3 REQUIRED)
-target_link_libraries(hestia_backend PRIVATE SQLite::SQLite3)
+target_link_libraries(hestia_backend PRIVATE SQLite::SQLite3 nlohmann_json::nlohmann_json)
 
 # Tests: Si BUILD_TESTS es ON, entra al directorio de tests
 if(BUILD_TESTS)

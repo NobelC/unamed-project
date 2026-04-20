@@ -12,8 +12,17 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Opciones
 option(BUILD_TESTS "Compilar tests unitarios" ON)
 
-# --- FetchContent para Catch2 (Automático, sin instalar nada en el sistema) ---
+# --- FetchContent para dependencias externas ---
 include(FetchContent)
+
+# nlohmann/json para parseo de skill_graph.json
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG        v3.11.3
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
 if(BUILD_TESTS)
     FetchContent_Declare(
         Catch2

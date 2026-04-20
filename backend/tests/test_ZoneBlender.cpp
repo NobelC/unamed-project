@@ -1,0 +1,108 @@
+#include <catch2/catch_test_macros.hpp>
+#include "../include/ZoneBlender.hpp"
+
+using namespace hestia::zone;
+using namespace hestia::bkt;
+using namespace hestia::mab;
+
+TEST_CASE("ZoneBlender: Selección de zona según P(L)", "[zone]") {
+
+    // Seed fijo para reproducibilidad
+    ZoneBlender blender(42);
+
+    SECTION("10% fáciles con P(L) >= 0.90") {
+        SkillState state;
+        state.m_pLearn_operative = 0.95;
+
+        int low_count = 0;
+        constexpr int N = 1000;
+
+        // Recreamos el blender con seed fijo para cada batch
+        ZoneBlender test_blender(12345);
+
+        for (int i = 0; i < N; ++i) {
+            Zone z = test_blender.selectZone(state);
+            if (z == Zone::LOW) low_count++;
+        }
+
+        // Esperamos ~10% en zona baja (con margen estadístico razonable: 5%-18%)
+        double ratio = static_cast<double>(low_count) / N;
+        REQUIRE(ratio > 0.05);
+        REQUIRE(ratio < 0.18);
+    }
+
+    SECTION("80% zona baja con P(L) < 0.40") {
+        SkillState state;
+        state.m_pLearn_operative = 0.20;
+
+        int low_count = 0;
+        constexpr int N = 1000;
+
+        ZoneBlender test_blender(54321);
+
+        for (int i = 0; i < N; ++i) {
+            Zone z = test_blender.selectZone(state);
+            if (z == Zone::LOW) low_count++;
+        }
+
+        // Esperamos ~80% en zona baja (con margen: 73%-87%)
+        double ratio = static_cast<double>(low_count) / N;
+        REQUIRE(ratio > 0.73);
+        REQUIRE(ratio < 0.87);
+    }
+
+    SECTION("60% zona baja con 0.40 <= P(L) < 0.60") {
+        SkillState state;
+        state.m_pLearn_operative = 0.50;
+
+        int low_count = 0;
+        constexpr int N = 1000;
+
+        ZoneBlender test_blender(99999);
+
+        for (int i = 0; i < N; ++i) {
+            Zone z = test_blender.selectZone(state);
+            if (z == Zone::LOW) low_count++;
+        }
+
+        double ratio = static_cast<double>(low_count) / N;
+        REQUIRE(ratio > 0.53);
+        REQUIRE(ratio < 0.67);
+    }
+
+    SECTION("30% zona baja con 0.60 <= P(L) < 0.80") {
+        SkillState state;
+        state.m_pLearn_operative = 0.70;
+
+        int low_count = 0;
+        constexpr int N = 1000;
+
+        ZoneBlender test_blender(77777);
+
+        for (int i = 0; i < N; ++i) {
+            Zone z = test_blender.selectZone(state);
+            if (z == Zone::LOW) low_count++;
+        }
+
+        double ratio = static_cast<double>(low_count) / N;
+        REQUIRE(ratio > 0.23);
+        REQUIRE(ratio < 0.37);
+    }
+
+    SECTION("Combina BKT + MAB: selectExercise retorna resultado válido") {
+        SkillState state;
+        state.m_pLearn_operative = 0.50;
+
+        MABEngine mab(1.0);
+        ZoneBlender test_blender(11111);
+
+        auto selection = test_blender.selectExercise(5, state, mab);
+
+        // Verificar que el resultado tiene valores válidos
+        REQUIRE(selection.skill_id == 5);
+        REQUIRE((selection.zone == Zone::LOW || selection.zone == Zone::CURRENT));
+        // El método debe ser uno de los 5 válidos (0-4)
+        REQUIRE(static_cast<int>(selection.method) >= 0);
+        REQUIRE(static_cast<int>(selection.method) <= 4);
+    }
+}
