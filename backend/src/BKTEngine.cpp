@@ -107,6 +107,17 @@ namespace hestia::bkt {
         state.consecutive_correct = 0;
       }
 
+      // Anti-stall logic: si el P(L) teórico supera consistentemente al operativo
+      if (state.m_pLearn_theorical > (state.m_pLearn_operative + ANTI_STALL_MARGIN)) {
+          state.m_sustained_theorical_dominance++;
+          
+          if (state.m_sustained_theorical_dominance >= ANTI_STALL_THRESHOLD) {
+              // Desbloqueo: el operativo atrapa al teórico para salir del estancamiento
+              state.m_pLearn_operative = state.m_pLearn_theorical;
+          }
+      } else {
+          state.m_sustained_theorical_dominance = 0;
+      }
 
       state.last_practice_time = std::chrono::system_clock::now();
       state.validationProbabilityRanges();
