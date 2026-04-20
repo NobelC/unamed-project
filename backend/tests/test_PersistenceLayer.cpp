@@ -28,7 +28,7 @@ static std::unique_ptr<PersistenceLayer> createTestDB(const std::string& path) {
             avg_response_time REAL NOT NULL,
             last_practice_time INTEGER NOT NULL,
             PRIMARY KEY (student_id, skill_id)
-        );
+        ) WITHOUT ROWID;
 
         CREATE TABLE IF NOT EXISTS method_state (
             student_id INTEGER NOT NULL,
@@ -37,10 +37,10 @@ static std::unique_ptr<PersistenceLayer> createTestDB(const std::string& path) {
             attempts INTEGER NOT NULL DEFAULT 0,
             successes INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (student_id, skill_id, method_id)
-        );
+        ) WITHOUT ROWID;
 
         CREATE TABLE IF NOT EXISTS response_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            log_id INTEGER PRIMARY KEY,
             student_id INTEGER NOT NULL,
             skill_id INTEGER NOT NULL,
             method_id INTEGER NOT NULL,

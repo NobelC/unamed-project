@@ -27,6 +27,12 @@ void MABEngine::updateMethod(METHOD used_method, bool success) noexcept {
     m_total_attempts++;
 }
 
+const MethodState& MABEngine::getMethodState(METHOD m) const noexcept {
+    const auto idx = static_cast<std::size_t>(m);
+    assert(idx < m_method_data.size());
+    return m_method_data[idx];
+}
+
 [[nodiscard]] METHOD MABEngine::selectMethod() const noexcept {
     for (std::size_t i = 0; i < m_method_data.size(); ++i) {
         if (m_method_data[i].count_attempts == 0) {

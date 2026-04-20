@@ -54,13 +54,12 @@ ResponseResult ResponseProcessor::processResponse(
     auto selection = m_blender.selectExercise(skill_id, state, m_mab);
 
     // 7. Persistir el estado actualizado
-    auto method_states = m_storage.loadMethodStates(student_id, skill_id);
-    auto method_idx = static_cast<size_t>(used_method);
+    const auto& ms = m_mab.getMethodState(used_method);
     [[maybe_unused]] auto save_result = m_storage.saveInteraction(
         student_id, skill_id, state, used_method, correct,
         static_cast<int>(response_ms),
-        method_states[method_idx].count_attempts,
-        method_states[method_idx].successes);
+        ms.count_attempts,
+        ms.successes);
 
     // 8. Retornar resultado
     return {

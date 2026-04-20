@@ -18,6 +18,7 @@ public:
 
     [[nodiscard]] METHOD selectMethod() const noexcept;
     void updateMethod(METHOD used_method, bool success) noexcept;
+    [[nodiscard]] const MethodState& getMethodState(METHOD m) const noexcept;
     void resetSession() noexcept;
 
 private:

@@ -13,15 +13,12 @@ ZoneBlender::ZoneBlender(uint64_t seed) {
 
 double ZoneBlender::getLowZoneProbability(double pL) noexcept {
     // Tabla de selección de zona según P(L) operativo:
-    // P(L) < 0.40       → 80% zona baja
-    // 0.40 ≤ P(L) < 0.60 → 60% zona baja
-    // 0.60 ≤ P(L) < 0.80 → 30% zona baja
-    // 0.80 ≤ P(L) < 0.90 → 10% zona baja
-    // P(L) ≥ 0.90        → 10% zona baja (fáciles para refuerzo)
-    if (pL < 0.40) return 0.80;
-    if (pL < 0.60) return 0.60;
-    if (pL < 0.80) return 0.30;
-    return 0.10; // P(L) >= 0.80
+    // P(L) < 0.60         → 80% zona baja
+    // 0.60 ≤ P(L) < 0.90  → 20% zona baja
+    // P(L) ≥ 0.90         → 10% zona baja
+    if (pL < 0.60) return 0.80;
+    if (pL < 0.90) return 0.20;
+    return 0.10; // P(L) >= 0.90
 }
 
 Zone ZoneBlender::selectZone(const bkt::SkillState& state) {

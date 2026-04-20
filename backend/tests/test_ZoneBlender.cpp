@@ -31,9 +31,9 @@ TEST_CASE("ZoneBlender: Selección de zona según P(L)", "[zone]") {
         REQUIRE(ratio < 0.18);
     }
 
-    SECTION("80% zona baja con P(L) < 0.40") {
+    SECTION("80% zona baja con P(L) < 0.60") {
         SkillState state;
-        state.m_pLearn_operative = 0.20;
+        state.m_pLearn_operative = 0.45; // Antes caía en 60%, ahora en 80%
 
         int low_count = 0;
         constexpr int N = 1000;
@@ -45,34 +45,15 @@ TEST_CASE("ZoneBlender: Selección de zona según P(L)", "[zone]") {
             if (z == Zone::LOW) low_count++;
         }
 
-        // Esperamos ~80% en zona baja (con margen: 73%-87%)
+        // Esperamos ~80% (con margen: 73%-87%)
         double ratio = static_cast<double>(low_count) / N;
         REQUIRE(ratio > 0.73);
         REQUIRE(ratio < 0.87);
     }
 
-    SECTION("60% zona baja con 0.40 <= P(L) < 0.60") {
+    SECTION("20% zona baja con 0.60 <= P(L) < 0.90") {
         SkillState state;
-        state.m_pLearn_operative = 0.50;
-
-        int low_count = 0;
-        constexpr int N = 1000;
-
-        ZoneBlender test_blender(99999);
-
-        for (int i = 0; i < N; ++i) {
-            Zone z = test_blender.selectZone(state);
-            if (z == Zone::LOW) low_count++;
-        }
-
-        double ratio = static_cast<double>(low_count) / N;
-        REQUIRE(ratio > 0.53);
-        REQUIRE(ratio < 0.67);
-    }
-
-    SECTION("30% zona baja con 0.60 <= P(L) < 0.80") {
-        SkillState state;
-        state.m_pLearn_operative = 0.70;
+        state.m_pLearn_operative = 0.75;
 
         int low_count = 0;
         constexpr int N = 1000;
@@ -84,9 +65,10 @@ TEST_CASE("ZoneBlender: Selección de zona según P(L)", "[zone]") {
             if (z == Zone::LOW) low_count++;
         }
 
+        // Esperamos ~20% (con margen: 13%-27%)
         double ratio = static_cast<double>(low_count) / N;
-        REQUIRE(ratio > 0.23);
-        REQUIRE(ratio < 0.37);
+        REQUIRE(ratio > 0.13);
+        REQUIRE(ratio < 0.27);
     }
 
     SECTION("Combina BKT + MAB: selectExercise retorna resultado válido") {

@@ -35,21 +35,28 @@ std::vector<int> SRSQueue::getDueSkills() const {
 }
 
 void SRSQueue::markResult(int skill_id, bool correct) {
-    auto it = m_entries.find(skill_id);
-    if (it == m_entries.end()) {
-        // Si no existe la entrada, la creamos desde streak 0
-        schedule(skill_id, 0);
-        it = m_entries.find(skill_id);
-    }
-
     auto now = std::chrono::system_clock::now();
+    auto it = m_entries.find(skill_id);
 
-    if (correct) {
-        it->second.correct_streak++;
-        it->second.next_review = now + getInterval(it->second.correct_streak);
+    if (it == m_entries.end()) {
+        SRSEntry entry;
+        entry.skill_id = skill_id;
+        if (correct) {
+            entry.correct_streak = 1;
+            entry.next_review = now + getInterval(1);
+        } else {
+            entry.correct_streak = 0;
+            entry.next_review = now + getInterval(0);
+        }
+        m_entries[skill_id] = entry;
     } else {
-        it->second.correct_streak = 0;
-        it->second.next_review = now + getInterval(0); // 1 día
+        if (correct) {
+            it->second.correct_streak++;
+            it->second.next_review = now + getInterval(it->second.correct_streak);
+        } else {
+            it->second.correct_streak = 0;
+            it->second.next_review = now + getInterval(0);
+        }
     }
 }
 
