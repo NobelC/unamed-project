@@ -23,7 +23,7 @@ public:
     [[nodiscard]] const MethodState& getMethodState(METHOD m) const noexcept;
     // Bug fix #2: restaura historial persistente por (niño × habilidad × método) desde la DB.
     // Debe llamarse al inicio de sesión en lugar de resetSession().
-    void loadStates(const std::array<MethodState, METHOD_COUNT>& persisted) noexcept;
+    void loadFrom(const std::array<MethodState, METHOD_COUNT>& persisted) noexcept;
     void resetSession() noexcept;
 
 private:

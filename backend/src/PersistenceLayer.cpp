@@ -201,15 +201,22 @@ PersistenceResult PersistenceLayer::saveInteraction(int sid, int skid, const bkt
 }
 
 PersistenceResult PersistenceLayer::purgeOldLogs(int months) noexcept {
-    char* err_msg = nullptr;
-    std::string sql = "DELETE FROM response_log WHERE timestamp < strftime('%s', 'now', '-" + std::to_string(months) + " months');";
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "DELETE FROM response_log WHERE timestamp < strftime('%s', 'now', '-' || CAST(? AS TEXT) || ' months');";
     
-    if (sqlite3_exec(m_db, sql.c_str(), nullptr, nullptr, &err_msg) != SQLITE_OK) {
-        std::string error_str = err_msg ? err_msg : "Unknown error";
-        sqlite3_free(err_msg); // Cierra la fuga de memoria
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        return {StorageError::WRITE_FAILURE, sqlite3_errmsg(m_db)};
+    }
+    
+    sqlite3_bind_int(stmt, 1, months);
+    
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        std::string error_str = sqlite3_errmsg(m_db);
+        sqlite3_finalize(stmt);
         return {StorageError::WRITE_FAILURE, error_str};
     }
     
+    sqlite3_finalize(stmt);
     return {StorageError::OK, ""};
 }
 

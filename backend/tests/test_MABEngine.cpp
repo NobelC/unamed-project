@@ -109,7 +109,7 @@ TEST_CASE("Update actualiza Q correctamente tras acierto/fallo", "[mab][sec7.1]"
         loaded[static_cast<size_t>(METHOD::GLOBAL)].successes           = 50;
 
         MABEngine fresh_engine(0.1); // C bajo: prioriza explotación sobre exploración
-        fresh_engine.loadStates(loaded);
+        fresh_engine.loadFrom(loaded);
         // Ningún método en cold start → UCB puro → AUDITORY (Q=1.0) gana con C bajo
         REQUIRE(fresh_engine.selectMethod() == METHOD::AUDITORY);
     }

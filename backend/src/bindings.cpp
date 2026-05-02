@@ -49,7 +49,7 @@ PYBIND11_MODULE(hestia_core, m) {
         // Bug fix #2: restaurar historial MAB desde DB al inicio de sesión
         .def("load_states", [](mab::MABEngine& self,
                                const std::array<mab::MethodState, 5>& states) {
-             self.loadStates(states);
+             self.loadFrom(states);
          })
         .def("reset_session", &mab::MABEngine::resetSession);
 

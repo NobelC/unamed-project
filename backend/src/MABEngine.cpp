@@ -11,7 +11,7 @@ MABEngine::MABEngine(double exploration_c) noexcept
     m_session_total_attempts = 0;
 }
 
-void MABEngine::loadStates(const std::array<MethodState, METHOD_COUNT>& persisted) noexcept {
+void MABEngine::loadFrom(const std::array<MethodState, METHOD_COUNT>& persisted) noexcept {
     m_method_data = persisted;
     // Recalcular el total de intentos a partir del estado cargado para que UCB sea correcto
     m_total_attempts = 0;

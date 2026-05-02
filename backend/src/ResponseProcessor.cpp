@@ -1,4 +1,6 @@
 #include "../include/ResponseProcessor.hpp"
+#include <map>
+#include <algorithm>
 
 namespace hestia::core {
 
@@ -36,7 +38,7 @@ ResponseResult ResponseProcessor::processResponse(
     bkt::SkillState state = loaded.value_or(bkt::SkillState{});
 
     auto mab_states = m_storage.loadMethodStates(student_id, skill_id);
-    m_mab.loadStates(mab_states);
+    m_mab.loadFrom(mab_states);
 
     // 2. Aplicar factor de olvido si han pasado >= 48 horas sin practicar
     m_bkt.applyForgetFactor(state);
@@ -92,13 +94,6 @@ std::vector<int> ResponseProcessor::getUnlockedSkills(const std::vector<int>& ma
     return m_skill_graph.getUnlockedSkills(mastered_ids);
 }
 
-} // namespace hestia::core
-#include "../include/ResponseProcessor.hpp"
-#include <map>
-#include <algorithm>
-
-namespace hestia::core {
-
 SessionReport ResponseProcessor::generateSessionReport(int student_id, int64_t session_start_ts) const {
     SessionReport report;
     report.total_attempts = 0;
@@ -139,7 +134,7 @@ SessionReport ResponseProcessor::generateSessionReport(int student_id, int64_t s
     }
     
     for (const auto& [skill_id, pls] : pl_map) {
-        report.pl_evolution.push_back({skill_id, pls.second - pls.first});
+        report.pl_evolution.emplace_back(skill_id, pls.second - pls.first);
     }
     
     int64_t session_end_ts = logs.back().timestamp;
