@@ -28,12 +28,15 @@ ResponseResult ResponseProcessor::processResponse(
 {
     // 0. Validar que el skill_id existe en el grafo
     if (!m_skill_graph.exists(skill_id)) {
-        return {mab::METHOD::VISUAL, zone::Zone::CURRENT, 0.0, false, false};
+        return {mab::METHOD::VISUAL, zone::Zone::CURRENT, 0.0, false, false, false};
     }
 
     // 1. Cargar estado desde persistencia (o usar default si no existe)
     auto loaded = m_storage.loadSkillState(student_id, skill_id);
     bkt::SkillState state = loaded.value_or(bkt::SkillState{});
+
+    auto mab_states = m_storage.loadMethodStates(student_id, skill_id);
+    m_mab.loadStates(mab_states);
 
     // 2. Aplicar factor de olvido si han pasado >= 48 horas sin practicar
     m_bkt.applyForgetFactor(state);
@@ -43,7 +46,8 @@ ResponseResult ResponseProcessor::processResponse(
 
     // 4. Solo actualizar modelos si el tiempo NO es anómalo
     if (!anomalous) {
-        m_bkt.updateKnowledge(state, correct, response_ms, m_lambda);
+        m_session.applyTransitionDecay(state, m_lambda);
+        m_bkt.updateKnowledge(state, correct, response_ms);
         m_mab.updateMethod(used_method, correct);
     }
 
@@ -51,7 +55,7 @@ ResponseResult ResponseProcessor::processResponse(
     m_srs_queue.markResult(skill_id, correct);
 
     // 6. Seleccionar siguiente ejercicio (zona + método)
-    auto selection = m_blender.selectExercise(skill_id, state, m_mab);
+    auto selection = m_blender.selectExercise(skill_id, state, m_mab, &m_srs_queue);
 
     // 7. Persistir el estado actualizado
     const auto& ms = m_mab.getMethodState(used_method);
@@ -67,7 +71,8 @@ ResponseResult ResponseProcessor::processResponse(
         selection.zone,
         state.m_pLearn_operative,
         anomalous,
-        true
+        true,
+        state.is_mastered
     };
 }
 
@@ -88,3 +93,59 @@ std::vector<int> ResponseProcessor::getUnlockedSkills(const std::vector<int>& ma
 }
 
 } // namespace hestia::core
+#include "../include/ResponseProcessor.hpp"
+#include <map>
+#include <algorithm>
+
+namespace hestia::core {
+
+SessionReport ResponseProcessor::generateSessionReport(int student_id, int64_t session_start_ts) const {
+    SessionReport report;
+    report.total_attempts = 0;
+    report.hit_rate = 0.0;
+    report.most_used_method = mab::METHOD::VISUAL;
+    report.total_session_time_minutes = 0.0;
+
+    auto logs = m_storage.getSessionLogs(student_id, session_start_ts);
+    if (logs.empty()) return report;
+
+    report.total_attempts = logs.size();
+    
+    int successes = 0;
+    std::map<int, std::pair<double, double>> pl_map; // skill_id -> {start_pl, end_pl}
+    std::map<mab::METHOD, int> method_counts;
+    
+    for (const auto& log : logs) {
+        if (log.is_correct) successes++;
+        
+        if (std::find(report.practiced_skills.begin(), report.practiced_skills.end(), log.skill_id) == report.practiced_skills.end()) {
+            report.practiced_skills.push_back(log.skill_id);
+            pl_map[log.skill_id] = {log.p_learn, log.p_learn};
+        } else {
+            pl_map[log.skill_id].second = log.p_learn;
+        }
+        
+        method_counts[log.method]++;
+    }
+    
+    report.hit_rate = static_cast<double>(successes) / report.total_attempts;
+    
+    int max_count = -1;
+    for (const auto& [method, count] : method_counts) {
+        if (count > max_count) {
+            max_count = count;
+            report.most_used_method = method;
+        }
+    }
+    
+    for (const auto& [skill_id, pls] : pl_map) {
+        report.pl_evolution.push_back({skill_id, pls.second - pls.first});
+    }
+    
+    int64_t session_end_ts = logs.back().timestamp;
+    report.total_session_time_minutes = (session_end_ts - session_start_ts) / 60.0;
+    
+    return report;
+}
+
+}

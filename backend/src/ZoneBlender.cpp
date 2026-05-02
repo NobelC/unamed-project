@@ -31,8 +31,15 @@ Zone ZoneBlender::selectZone(const bkt::SkillState& state) {
 ExerciseSelection ZoneBlender::selectExercise(
     int skill_id,
     const bkt::SkillState& state,
-    mab::MABEngine& mab_engine)
+    mab::MABEngine& mab_engine,
+    srs::SRSQueue* srs_queue)
 {
+    if (srs_queue) {
+        auto due = srs_queue->getDueSkills();
+        if (!due.empty()) {
+            return {Zone::LOW, mab_engine.selectMethod(), due.front()};
+        }
+    }
     Zone zone = selectZone(state);
     mab::METHOD method = mab_engine.selectMethod();
     return {zone, method, skill_id};

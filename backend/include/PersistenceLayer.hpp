@@ -26,9 +26,17 @@ struct [[nodiscard]] PersistenceResult {
     [[nodiscard]] bool success() const noexcept { return error == StorageError::OK; }
 };
 
+struct LogEntry {
+    int skill_id;
+    mab::METHOD method;
+    int64_t timestamp;
+    bool is_correct;
+    double p_learn;
+};
+
 class PersistenceLayer {
 public:
-    static constexpr int CURRENT_VERSION = 2; // v2: srs_state table added
+    static constexpr int CURRENT_VERSION = 5; // v5: plearn added, indexes, students
     static constexpr size_t METHOD_COUNT = 5;
 
     static std::unique_ptr<PersistenceLayer> create(const std::string& db_path);
@@ -44,6 +52,13 @@ public:
     [[nodiscard]] std::optional<bkt::SkillState> loadSkillState(int student_id, int skill_id) noexcept;
     
     [[nodiscard]] std::array<mab::MethodState, METHOD_COUNT> loadMethodStates(int student_id, int skill_id) noexcept;
+
+    // Consultas Analíticas (Feature 17)
+    [[nodiscard]] double getHitRate(int student_id, int skill_id) noexcept;
+    [[nodiscard]] std::vector<std::pair<int64_t, double>> getPLHistory(int student_id, int skill_id) noexcept;
+    [[nodiscard]] mab::METHOD getBestMethod(int student_id, int skill_id) noexcept;
+    [[nodiscard]] double getAverageSessionDuration(int student_id) noexcept;
+    [[nodiscard]] std::vector<LogEntry> getSessionLogs(int student_id, int64_t session_start_ts) noexcept;
 
     // Bug fix #6: persistencia del estado SRS entre sesiones
     [[nodiscard]] PersistenceResult saveSrsState(int student_id, const srs::SRSQueue& queue) noexcept;
@@ -66,6 +81,12 @@ private:
     // Bug fix #6: statements para persistir cola SRS
     sqlite3_stmt* m_upsert_srs = nullptr;
     sqlite3_stmt* m_select_srs = nullptr;
+
+    // Analytics statements
+    sqlite3_stmt* m_select_hitrate = nullptr;
+    sqlite3_stmt* m_select_pl_history = nullptr;
+    sqlite3_stmt* m_select_session_durations = nullptr;
+    sqlite3_stmt* m_select_session_logs = nullptr;
 };
 
 } // namespace hestia::persistence

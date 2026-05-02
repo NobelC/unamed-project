@@ -3,16 +3,6 @@
 #include <cmath>
 
 namespace hestia::bkt {
-  void BKTEngine::updateTransitionDecay(SkillState& state, double lambda) noexcept{
-      // Bug fix #3: usar steady_clock (monótono) en lugar de system_clock para métricas
-      // intra-sesión. system_clock puede saltar hacia atrás por NTP/cambios de zona horaria,
-      // produciendo una duración negativa y un exponent positivo que hace explotar el decaimiento.
-      std::chrono::duration<double> duration = std::chrono::steady_clock::now() - state.session_start_time_steady;
-      using minute_double_cast = std::chrono::duration<double, std::ratio<60>>;
-      double minutes_total = std::chrono::duration_cast<minute_double_cast>(duration).count();
-      state.m_pTransition = state.m_pTransition * std::exp((-lambda) * minutes_total);
-      state.validationProbabilityRanges();
-    } 
 
     constexpr double calculatePosterior(const SkillState& state, bool is_correct) noexcept {
       double pL = state.m_pLearn_operative;
@@ -77,7 +67,7 @@ namespace hestia::bkt {
     //======================================================================================================================
     //======================================================================================================================
 
-    void BKTEngine::updateKnowledge(SkillState& state, bool is_correct, double response_time_ms, double lambda) noexcept {
+    void BKTEngine::updateKnowledge(SkillState& state, bool is_correct, double response_time_ms) noexcept {
       state.total_attempts++;
 
       if(state.isColdStart()){
@@ -86,7 +76,6 @@ namespace hestia::bkt {
       }
       else{
         state.avg_response_time_ms = state.avg_response_time_ms + (response_time_ms - state.avg_response_time_ms) / state.total_attempts;
-        updateTransitionDecay(state,lambda);
       }
 
       double pL_posterior = calculatePosterior(state, is_correct);
@@ -96,25 +85,29 @@ namespace hestia::bkt {
       double pL_new_theorical = calculateTransitionTheorical(pL_posterior_theorical);
 
       if (is_correct) {
-        double omega = calculatePenalty(response_time_ms, state.avg_response_time_ms);
-        double omega_theorical = calculatePenaltyTheorical(response_time_ms, state.avg_response_time_ms);
+        double omega = (state.total_attempts <= 2) ? 1.0 : calculatePenalty(response_time_ms, state.avg_response_time_ms);
+        double omega_theorical = (state.total_attempts <= 2) ? 1.0 : calculatePenaltyTheorical(response_time_ms, state.avg_response_time_ms);
         state.m_pLearn_operative = state.m_pLearn_operative + (pL_new - state.m_pLearn_operative) * omega;
         state.m_pLearn_theorical = state.m_pLearn_theorical + (pL_new_theorical - state.m_pLearn_theorical) * omega_theorical;
         state.consecutive_correct++;
         state.consecutive_error = 0;
+        state.consecutive_slow_error = 0;
       } 
       else {
         // Bug fix #5: Lento + Incorrecto → Alta penalización (Sección 3.2, Extensión 4).
-        // Antes, la rama incorrecta aplicaba pL_new directamente sin considerar el tiempo,
-        // dando el mismo resultado a una respuesta rápida-incorrecta y lenta-incorrecta.
-        // Ahora se usa omega como penalización adicional: respuesta lenta incorrecta reduce
-        // más P(G) al bloquear la ganancia de conocimiento más agresivamente.
-        double omega = calculatePenalty(response_time_ms, state.avg_response_time_ms);
-        double omega_theorical = calculatePenaltyTheorical(response_time_ms, state.avg_response_time_ms);
+        double omega = (state.total_attempts <= 2) ? 1.0 : calculatePenalty(response_time_ms, state.avg_response_time_ms);
+        double omega_theorical = (state.total_attempts <= 2) ? 1.0 : calculatePenaltyTheorical(response_time_ms, state.avg_response_time_ms);
         state.m_pLearn_operative = state.m_pLearn_operative + (pL_new - state.m_pLearn_operative) * omega;
         state.m_pLearn_theorical = state.m_pLearn_theorical + (pL_new_theorical - state.m_pLearn_theorical) * omega_theorical;
         state.consecutive_error++;
         state.consecutive_correct = 0;
+
+        if (response_time_ms > state.avg_response_time_ms * 2.0) {
+            state.consecutive_slow_error++;
+            state.m_pGuess = std::max(0.01, state.m_pGuess * 0.8);
+        } else {
+            state.consecutive_slow_error = 0;
+        }
       }
 
       // Anti-stall logic: si el P(L) teórico supera consistentemente al operativo
@@ -129,6 +122,7 @@ namespace hestia::bkt {
               // Sin este reset, si m_pLearn_theorical sigue alto en el siguiente intento,
               // la condición se cumple otra vez y el operativo se sobreescribe indefinidamente.
               state.m_sustained_theorical_dominance = 0;
+              state.is_mastered = true;
           }
       } else {
           state.m_sustained_theorical_dominance = 0;

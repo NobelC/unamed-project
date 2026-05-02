@@ -2,6 +2,7 @@
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <unordered_set>
+#include <functional>
 
 namespace hestia::graph {
 
@@ -42,6 +43,28 @@ bool SkillGraph::load(const std::string& path) {
     for (const auto& [id, node] : parsed) {
         for (int prereq_id : node.prerequisites) {
             if (!parsed.contains(prereq_id)) return false;
+        }
+    }
+
+    // Validación de ciclos (DFS)
+    std::unordered_map<int, int> visited; // 0: unvisited, 1: visiting, 2: visited
+    std::function<bool(int)> has_cycle = [&](int node_id) {
+        if (visited[node_id] == 1) return true;
+        if (visited[node_id] == 2) return false;
+
+        visited[node_id] = 1;
+        if (parsed.contains(node_id)) {
+            for (int prereq : parsed.at(node_id).prerequisites) {
+                if (has_cycle(prereq)) return true;
+            }
+        }
+        visited[node_id] = 2;
+        return false;
+    };
+
+    for (const auto& [id, node] : parsed) {
+        if (visited[id] == 0 && has_cycle(id)) {
+            return false;
         }
     }
 

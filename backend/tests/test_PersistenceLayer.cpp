@@ -14,7 +14,7 @@ static std::unique_ptr<PersistenceLayer> createTestDB(const std::string& path) {
     sqlite3_open(path.c_str(), &raw_db);
 
     const char* schema = R"(
-        PRAGMA user_version = 1;
+        PRAGMA user_version = 5;
 
         CREATE TABLE IF NOT EXISTS skill_state (
             student_id INTEGER NOT NULL,
@@ -46,7 +46,22 @@ static std::unique_ptr<PersistenceLayer> createTestDB(const std::string& path) {
             method_id INTEGER NOT NULL,
             timestamp INTEGER NOT NULL,
             is_correct INTEGER NOT NULL,
-            response_ms INTEGER NOT NULL
+            response_ms INTEGER NOT NULL,
+            p_learn REAL DEFAULT 0.0
+        );
+
+        CREATE TABLE IF NOT EXISTS srs_state (
+            student_id INTEGER NOT NULL,
+            skill_id INTEGER NOT NULL,
+            correct_streak INTEGER NOT NULL DEFAULT 0,
+            next_review INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (student_id, skill_id)
+        ) WITHOUT ROWID;
+
+        CREATE TABLE IF NOT EXISTS students (
+            student_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            created_at INTEGER NOT NULL
         );
     )";
 

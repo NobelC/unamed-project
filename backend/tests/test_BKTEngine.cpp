@@ -3,6 +3,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include "../include/BKTEngine.hpp"
+#include "../include/SessionManager.hpp"
 
 
 
@@ -18,7 +19,8 @@ TEST_CASE("Unit test for BKTEngine", "[Behavioral testing of variables]") {
   //P(t) respeta el piso despues del decay
   SECTION("P(T) respera el piso despues del decay"){
     state.session_start_time = std::chrono::system_clock::now() - time;
-    Engine.updateTransitionDecay(state,lambda);
+    hestia::bkt::SessionManager session;
+    session.applyTransitionDecay(state,lambda);
     REQUIRE(state.m_pTransition >= hestia::bkt::P_TRANSITION_FLOOR);
   }
   //P(F) no aplica si no ha pasado 48 horas
@@ -48,7 +50,7 @@ TEST_CASE("Unit test for BKTEngine", "[Behavioral testing of variables]") {
     test_state.m_pLearn_operative = 0.2;
     double pL_antes = test_state.m_pLearn_operative;
     
-    Engine.updateKnowledge(test_state, true, 1000.0, lambda);
+    Engine.updateKnowledge(test_state, true, 1000.0);
     
     REQUIRE(test_state.m_pLearn_operative > pL_antes);
   }
@@ -61,7 +63,7 @@ TEST_CASE("Unit test for BKTEngine", "[Behavioral testing of variables]") {
     test_state.m_pLearn_operative = 0.5; // un valor medio para asegurar que pueda bajar
     double pL_antes = test_state.m_pLearn_operative;
     
-    Engine.updateKnowledge(test_state, false, 1000.0, lambda);
+    Engine.updateKnowledge(test_state, false, 1000.0);
     
     REQUIRE(test_state.m_pLearn_operative < pL_antes);
   }
@@ -83,9 +85,9 @@ TEST_CASE("Unit test for BKTEngine", "[Behavioral testing of variables]") {
     state_slow.m_pLearn_operative = 0.2;
 
     // Respuesta rápida (1000ms <= avg)
-    Engine.updateKnowledge(state_fast, true, 1000.0, lambda);
+    Engine.updateKnowledge(state_fast, true, 1000.0);
     // Respuesta lenta (1800ms > avg)
-    Engine.updateKnowledge(state_slow, true, 1800.0, lambda);
+    Engine.updateKnowledge(state_slow, true, 1800.0);
 
     // El caso lento debe tener un incremento menor de P(L) debido a la penalización (omega)
     REQUIRE(state_slow.m_pLearn_operative < state_fast.m_pLearn_operative);
@@ -101,7 +103,7 @@ TEST_CASE("Unit test for BKTEngine", "[Behavioral testing of variables]") {
     
     // Simulamos un par de aciertos (racha corta)
     for (int i = 0; i < 2; ++i) {
-        Engine.updateKnowledge(test_state, true, 1000.0, lambda);
+        Engine.updateKnowledge(test_state, true, 1000.0);
     }
     
     REQUIRE(test_state.m_sustained_theorical_dominance == 0);
@@ -118,7 +120,7 @@ TEST_CASE("Unit test for BKTEngine", "[Behavioral testing of variables]") {
     for (int i = 0; i < 5; ++i) {
         test_state.m_pLearn_theorical = 0.9; 
         test_state.m_pLearn_operative = 0.2; 
-        Engine.updateKnowledge(test_state, true, 1000.0, lambda);
+        Engine.updateKnowledge(test_state, true, 1000.0);
     }
     
     // Esperamos que el contador de dominio haya superado el umbral (o al menos que no sea 0)

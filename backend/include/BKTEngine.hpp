@@ -35,19 +35,25 @@ struct SkillState {
     std::chrono::system_clock::time_point last_practice_time{};   // wall-clock: persistencia y olvido
     std::chrono::system_clock::time_point session_start_time{};   // wall-clock: compatibilidad / cleanup
     std::chrono::steady_clock::time_point session_start_time_steady{}; // Bug fix #3: monótono para decay intra-sesión
+    std::chrono::steady_clock::time_point last_update_time_steady{}; // Track exact time of last decay
 
     uint32_t skill_id;
     uint32_t total_attempts{0};
     uint32_t session_count{0};
     uint32_t consecutive_correct{0};
     uint32_t consecutive_error{0};
+    uint32_t consecutive_slow_error{0};
     uint32_t m_sustained_theorical_dominance{0};
 
     // Estado
     bool is_initialized = {false};
+    bool is_mastered = {false};
 
     // Consultas inmutables
     [[nodiscard]] constexpr bool isColdStart() const noexcept { return !is_initialized; }
+    [[nodiscard]] constexpr bool isMastered(double operative_threshold = 0.85) const noexcept {
+        return is_mastered && m_pLearn_operative >= operative_threshold;
+    }
     [[nodiscard]] bool exceedsForgetThreshold() const noexcept {
         if (last_practice_time.time_since_epoch().count() == 0) {
             return false;
@@ -79,9 +85,7 @@ class BKTEngine {
 public:
     explicit BKTEngine() noexcept = default;
     // Actular estado tras cada respuesta del estudiante
-    void updateTransitionDecay(SkillState& state, double lambda) noexcept;
-    void updateKnowledge(SkillState& state, bool is_correct, double response_time_ms,
-                         double lambda) noexcept;
+    void updateKnowledge(SkillState& state, bool is_correct, double response_time_ms) noexcept;
     void applyForgetFactor(SkillState& state) noexcept;
 };
 }  // namespace hestia::bkt

@@ -7,10 +7,8 @@ namespace hestia::mab {
 
 MABEngine::MABEngine(double exploration_c) noexcept 
     : m_exploration_constant(exploration_c) {
-    // Bug fix #2: NO llamar resetSession() aquí. El historial MAB por
-    // (niño × habilidad × método) debe cargarse desde la DB vía loadStates(),
-    // no re-inicializarse a cold-start en cada sesión.
     m_total_attempts = 0;
+    m_session_total_attempts = 0;
 }
 
 void MABEngine::loadStates(const std::array<MethodState, METHOD_COUNT>& persisted) noexcept {
@@ -23,12 +21,8 @@ void MABEngine::loadStates(const std::array<MethodState, METHOD_COUNT>& persiste
 }
 
 void MABEngine::resetSession() noexcept {
-    // Bug fix #2: resetSession ahora SOLO resetea el contador de sesión actual;
-    // NO borra count_attempts ni successes porque ese es el historial persistente
-    // del MAB por (niño × habilidad × método). Borrarlos aquí causaba cold-start
-    // en cada sesión, ignorando todas las sesiones previas.
-    // Este método se mantiene por compatibilidad con bindings existentes.
-    m_total_attempts = 0;
+    m_session_data.fill(MethodState{0, 0});
+    m_session_total_attempts = 0;
 }
 
 void MABEngine::updateMethod(METHOD used_method, bool success) noexcept {
@@ -36,8 +30,13 @@ void MABEngine::updateMethod(METHOD used_method, bool success) noexcept {
     assert(idx < m_method_data.size() && "MABEngine: Index out of bounds");
 
     m_method_data[idx].count_attempts++;
-    if (success) m_method_data[idx].successes++;
+    m_session_data[idx].count_attempts++;
+    if (success) {
+        m_method_data[idx].successes++;
+        m_session_data[idx].successes++;
+    }
     m_total_attempts++;
+    m_session_total_attempts++;
 }
 
 const MethodState& MABEngine::getMethodState(METHOD m) const noexcept {
@@ -47,6 +46,10 @@ const MethodState& MABEngine::getMethodState(METHOD m) const noexcept {
 }
 
 [[nodiscard]] METHOD MABEngine::selectMethod() const noexcept {
+    if (m_total_attempts == 0) {
+        return static_cast<METHOD>(0);
+    }
+
     for (std::size_t i = 0; i < m_method_data.size(); ++i) {
         if (m_method_data[i].count_attempts == 0) {
             return static_cast<METHOD>(i);

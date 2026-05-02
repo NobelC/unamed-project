@@ -19,6 +19,9 @@ public:
 
     // Helper que usa session_start_time para calcular minutos transcurridos
     [[nodiscard]] double getSessionElapsedMinutes(const SkillState& state) const noexcept;
+
+    // Aplica el decaimiento de P(T) de forma incremental
+    void applyTransitionDecay(SkillState& state, double lambda) const noexcept;
 };
 
 } // namespace hestia::bkt

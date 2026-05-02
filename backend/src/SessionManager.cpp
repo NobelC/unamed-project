@@ -1,5 +1,6 @@
 #include "../include/SessionManager.hpp"
 #include <chrono>
+#include <cmath>
 
 namespace hestia::bkt {
 
@@ -7,6 +8,7 @@ void SessionManager::startSession(SkillState& state) const noexcept {
     state.session_start_time = std::chrono::system_clock::now();
     // Bug fix #3: inicializar también el punto de referencia monótono usado en updateTransitionDecay
     state.session_start_time_steady = std::chrono::steady_clock::now();
+    state.last_update_time_steady = state.session_start_time_steady;
     state.m_pTransition = DEFAULT_P_TRANSITION;
     state.validationProbabilityRanges();
 }
@@ -33,6 +35,21 @@ double SessionManager::getSessionElapsedMinutes(const SkillState& state) const n
     std::chrono::duration<double> duration = std::chrono::steady_clock::now() - state.session_start_time_steady;
     using minute_double_cast = std::chrono::duration<double, std::ratio<60>>;
     return std::chrono::duration_cast<minute_double_cast>(duration).count();
+}
+
+void SessionManager::applyTransitionDecay(SkillState& state, double lambda) const noexcept {
+    if (state.last_update_time_steady.time_since_epoch().count() == 0) {
+        state.last_update_time_steady = std::chrono::steady_clock::now();
+        return;
+    }
+    
+    std::chrono::duration<double> duration = std::chrono::steady_clock::now() - state.last_update_time_steady;
+    using minute_double_cast = std::chrono::duration<double, std::ratio<60>>;
+    double minutes_elapsed = std::chrono::duration_cast<minute_double_cast>(duration).count();
+    
+    state.m_pTransition = state.m_pTransition * std::exp((-lambda) * minutes_elapsed);
+    state.last_update_time_steady = std::chrono::steady_clock::now();
+    state.validationProbabilityRanges();
 }
 
 } // namespace hestia::bkt

@@ -1,5 +1,4 @@
 #include <iostream>
-#include <vector>
 #include <string>
 #include <random>
 #include <filesystem>
@@ -46,16 +45,17 @@ void initialize_schema(const std::string& path) {
     sqlite3_close(db);
 }
 
-void run_scenario(core::ResponseProcessor& processor, const std::string& name, int iterations, int student_id, int skill_id) {
+void run_scenario(core::ResponseProcessor& processor, const std::string& name, int iterations,
+                  int student_id, int skill_id) {
     std::cout << "\n>>> Running Scenario: " << name << " <<<" << std::endl;
-    
+
     std::default_random_engine gen(42);
     std::uniform_real_distribution<double> dist(0.0, 1.0);
-    
+
     for (int i = 0; i < iterations; ++i) {
         bool correct = true;
         double time_ms = 1500.0;
-        
+
         if (name == "Random Clicker") {
             correct = dist(gen) > 0.5;
             time_ms = 400.0 + dist(gen) * 400.0;
@@ -71,18 +71,48 @@ void run_scenario(core::ResponseProcessor& processor, const std::string& name, i
             time_ms = 2000.0;
         } else if (name == "Speed Demon (Anomalous)") {
             correct = true;
-            time_ms = 50.0; // Anomaly check usually < 300ms
+            time_ms = 50.0;  // Anomaly check usually < 300ms
         } else if (name == "Slow Processor") {
             correct = true;
             time_ms = 20000.0;
+        } else if (name == "500 Corrects") {
+            correct = true;
+            time_ms = 1500.0;
+        } else if (name == "500 Incorrects") {
+            correct = false;
+            time_ms = 1500.0;
+        } else if (name == "30 Days Inactivity") {
+            correct = true;
+            time_ms = 1500.0;
+            if (i == 1) {
+                // Retroceder el tiempo 30 días en la base de datos
+                sqlite3* db;
+                sqlite3_open("stress_bot.db", &db);
+                std::string sql =
+                    "UPDATE skill_state SET last_practice_time = strftime('%s', 'now', '-30 days') "
+                    "WHERE student_id = " +
+                    std::to_string(student_id) + " AND skill_id = " + std::to_string(skill_id) +
+                    ";";
+                sqlite3_exec(db, sql.c_str(), nullptr, nullptr, nullptr);
+                sqlite3_close(db);
+                std::cout << "  [Injected 30 days of inactivity]" << std::endl;
+            }
         }
-        
-        auto result = processor.processResponse(student_id, skill_id, mab::METHOD::VISUAL, correct, time_ms);
-        
-        if (i % 10 == 0 || i == iterations - 1) {
-            std::cout << "Iter " << i << ": pL=" << result.current_pL 
-                      << " Anomaly=" << (result.was_anomalous ? "YES" : "NO") 
+
+        auto result =
+            processor.processResponse(student_id, skill_id, mab::METHOD::VISUAL, correct, time_ms);
+
+        if (i % (iterations >= 100 ? iterations / 10 : 10) == 0 || i == iterations - 1) {
+            std::cout << "Iter " << i << ": pL=" << result.current_pL
+                      << " Anomaly=" << (result.was_anomalous ? "YES" : "NO")
                       << " Valid=" << (result.valid_skill ? "YES" : "NO") << std::endl;
+        }
+
+        if (name == "500 Corrects" && result.current_pL > 0.98) {
+            std::cerr << "FAIL: 500 Corrects exceeded P(L)=0.98 bound!" << std::endl;
+        }
+        if (name == "500 Incorrects" && result.current_pL < 0.0) {
+            std::cerr << "FAIL: 500 Incorrects dropped P(L) below 0.0!" << std::endl;
         }
     }
 }
@@ -104,14 +134,17 @@ int main() {
                 {"id": 104, "name": "Skill 104", "prerequisites": []},
                 {"id": 105, "name": "Skill 105", "prerequisites": []},
                 {"id": 106, "name": "Skill 106", "prerequisites": []},
-                {"id": 107, "name": "Skill 107", "prerequisites": []}
+                {"id": 107, "name": "Skill 107", "prerequisites": []},
+                {"id": 108, "name": "Skill 108", "prerequisites": []},
+                {"id": 109, "name": "Skill 109", "prerequisites": []},
+                {"id": 110, "name": "Skill 110", "prerequisites": []}
             ]
         })";
     }
 
     if (std::filesystem::exists(db_path)) std::filesystem::remove(db_path);
     initialize_schema(db_path);
-    
+
     auto storage = persistence::PersistenceLayer::create(db_path);
     bkt::BKTEngine bkt;
     mab::MABEngine mab;
@@ -120,9 +153,9 @@ int main() {
     graph::SkillGraph skill_graph;
     skill_graph.load(graph_path);
     srs::SRSQueue srs;
-    
+
     core::ResponseProcessor processor(bkt, mab, session, *storage, blender, skill_graph, srs);
-    
+
     run_scenario(processor, "Perfect Performance", 20, 1, 101);
     run_scenario(processor, "Random Clicker", 50, 2, 102);
     run_scenario(processor, "Fatigue (Decreasing)", 40, 3, 103);
@@ -130,7 +163,10 @@ int main() {
     run_scenario(processor, "Oscillating", 40, 5, 105);
     run_scenario(processor, "Speed Demon (Anomalous)", 20, 6, 106);
     run_scenario(processor, "Slow Processor", 10, 7, 107);
-    
+    run_scenario(processor, "500 Corrects", 500, 8, 108);
+    run_scenario(processor, "500 Incorrects", 500, 9, 109);
+    run_scenario(processor, "30 Days Inactivity", 5, 10, 110);
+
     // Cleanup
     std::filesystem::remove(db_path);
     std::filesystem::remove(graph_path);

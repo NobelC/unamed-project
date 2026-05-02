@@ -1,6 +1,7 @@
 #pragma once
 #include "BKTEngine.hpp"
 #include "MABEngine.hpp"
+#include "SRSQueue.hpp"
 #include <random>
 #include <cstdint>
 
@@ -27,7 +28,8 @@ public:
     [[nodiscard]] ExerciseSelection selectExercise(
         int skill_id,
         const bkt::SkillState& state,
-        mab::MABEngine& mab_engine);
+        mab::MABEngine& mab_engine,
+        srs::SRSQueue* srs_queue = nullptr);
 
 private:
     std::mt19937_64 m_rng;

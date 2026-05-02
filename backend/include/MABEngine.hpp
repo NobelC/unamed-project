@@ -29,6 +29,8 @@ public:
 private:
     std::array<MethodState, METHOD_COUNT> m_method_data{};
     uint32_t m_total_attempts{0};
+    std::array<MethodState, METHOD_COUNT> m_session_data{};
+    uint32_t m_session_total_attempts{0};
     double m_exploration_constant;
 
     [[nodiscard]] static double calculateUCB(const MethodState& state, 
