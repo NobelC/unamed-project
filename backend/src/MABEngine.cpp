@@ -7,15 +7,28 @@ namespace hestia::mab {
 
 MABEngine::MABEngine(double exploration_c) noexcept 
     : m_exploration_constant(exploration_c) {
-    resetSession();
+    // Bug fix #2: NO llamar resetSession() aquí. El historial MAB por
+    // (niño × habilidad × método) debe cargarse desde la DB vía loadStates(),
+    // no re-inicializarse a cold-start en cada sesión.
+    m_total_attempts = 0;
+}
+
+void MABEngine::loadStates(const std::array<MethodState, METHOD_COUNT>& persisted) noexcept {
+    m_method_data = persisted;
+    // Recalcular el total de intentos a partir del estado cargado para que UCB sea correcto
+    m_total_attempts = 0;
+    for (const auto& s : m_method_data) {
+        m_total_attempts += s.count_attempts;
+    }
 }
 
 void MABEngine::resetSession() noexcept {
+    // Bug fix #2: resetSession ahora SOLO resetea el contador de sesión actual;
+    // NO borra count_attempts ni successes porque ese es el historial persistente
+    // del MAB por (niño × habilidad × método). Borrarlos aquí causaba cold-start
+    // en cada sesión, ignorando todas las sesiones previas.
+    // Este método se mantiene por compatibilidad con bindings existentes.
     m_total_attempts = 0;
-    for (auto& state : m_method_data) {
-        state.count_attempts = 0;
-        state.successes = 0;
-    }
 }
 
 void MABEngine::updateMethod(METHOD used_method, bool success) noexcept {

@@ -82,9 +82,35 @@ TEST_CASE("Update actualiza Q correctamente tras acierto/fallo", "[mab][sec7.1]"
     // No podemos acceder a los privados, pero podemos verificar el comportamiento 
     // a través de la fórmula UCB en una comparación controlada.
     
-    SECTION("Verificación de persistencia mediante reset") {
+    SECTION("Verificación: resetSession preserva historial (Bug fix #2)") {
+        // Bug fix #2: resetSession() ya NO borra count_attempts/successes.
+        // VISUAL tiene 15 intentos; los otros métodos siguen en count_attempts=0.
+        // El UCB explora primero los desconocidos (cold-start), así que selectMethod
+        // puede retornar AUDITORY. Lo importante: el ESTADO DE VISUAL se conserva.
         engine.resetSession();
-        // Tras reset, el primer método debe ser VISUAL por Cold Start
-        REQUIRE(engine.selectMethod() == METHOD::VISUAL);
+        const auto& vis_state = engine.getMethodState(METHOD::VISUAL);
+        REQUIRE(vis_state.count_attempts == 15); // historial preservado tras reset
+        REQUIRE(vis_state.successes == 10);      // 10 aciertos preservados
+    }
+
+    SECTION("Verificación: loadStates restaura historial desde DB (Bug fix #2)") {
+        // Simular carga desde DB: todos los métodos tienen historial para evitar cold-start.
+        // AUDITORY tiene Q=1.0 (100/100), el resto Q=0.5 (50/100).
+        std::array<MethodState, MABEngine::METHOD_COUNT> loaded{};
+        loaded[static_cast<size_t>(METHOD::VISUAL)].count_attempts      = 100;
+        loaded[static_cast<size_t>(METHOD::VISUAL)].successes            = 50;
+        loaded[static_cast<size_t>(METHOD::AUDITORY)].count_attempts    = 100;
+        loaded[static_cast<size_t>(METHOD::AUDITORY)].successes         = 100; // Q=1.0
+        loaded[static_cast<size_t>(METHOD::KINESTHETIC)].count_attempts = 100;
+        loaded[static_cast<size_t>(METHOD::KINESTHETIC)].successes      = 50;
+        loaded[static_cast<size_t>(METHOD::PHONETIC)].count_attempts    = 100;
+        loaded[static_cast<size_t>(METHOD::PHONETIC)].successes         = 50;
+        loaded[static_cast<size_t>(METHOD::GLOBAL)].count_attempts      = 100;
+        loaded[static_cast<size_t>(METHOD::GLOBAL)].successes           = 50;
+
+        MABEngine fresh_engine(0.1); // C bajo: prioriza explotación sobre exploración
+        fresh_engine.loadStates(loaded);
+        // Ningún método en cold start → UCB puro → AUDITORY (Q=1.0) gana con C bajo
+        REQUIRE(fresh_engine.selectMethod() == METHOD::AUDITORY);
     }
 }

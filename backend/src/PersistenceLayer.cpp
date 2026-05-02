@@ -23,6 +23,9 @@ PersistenceLayer::~PersistenceLayer() {
     sqlite3_finalize(m_insert_log);
     sqlite3_finalize(m_select_bkt);
     sqlite3_finalize(m_select_mab);
+    // Bug fix #6: liberar statements SRS
+    sqlite3_finalize(m_upsert_srs);
+    sqlite3_finalize(m_select_srs);
     sqlite3_close(m_db);
 }
 
@@ -32,6 +35,9 @@ void PersistenceLayer::resetAllStatements() noexcept {
     sqlite3_clear_bindings(m_insert_log); sqlite3_reset(m_insert_log);
     sqlite3_clear_bindings(m_select_bkt); sqlite3_reset(m_select_bkt);
     sqlite3_clear_bindings(m_select_mab); sqlite3_reset(m_select_mab);
+    // Bug fix #6
+    if (m_upsert_srs) { sqlite3_clear_bindings(m_upsert_srs); sqlite3_reset(m_upsert_srs); }
+    if (m_select_srs) { sqlite3_clear_bindings(m_select_srs); sqlite3_reset(m_select_srs); }
 }
 
 PersistenceResult PersistenceLayer::checkSchemaVersion() noexcept {
@@ -40,7 +46,11 @@ PersistenceResult PersistenceLayer::checkSchemaVersion() noexcept {
     if (sqlite3_step(stmt) == SQLITE_ROW) {
         int ver = sqlite3_column_int(stmt, 0);
         sqlite3_finalize(stmt);
-        if (ver != CURRENT_VERSION) return {StorageError::SCHEMA_MISMATCH, "DB version mismatch"};
+        // Aceptar v1 (legacy sin srs_state) y v2 (con srs_state).
+        // v1 funciona correctamente: saveSrsState/loadSrsState fallarán
+        // silenciosamente si la tabla no existe, lo cual es seguro.
+        if (ver < 1 || ver > CURRENT_VERSION)
+            return {StorageError::SCHEMA_MISMATCH, "DB version mismatch"};
         return {StorageError::OK, ""};
     }
     sqlite3_finalize(stmt);
@@ -62,11 +72,23 @@ PersistenceResult PersistenceLayer::prepareStatements() noexcept {
     const char* q_sbkt = "SELECT * FROM skill_state WHERE student_id = ? AND skill_id = ?;";
     const char* q_smab = "SELECT method_id, attempts, successes FROM method_state WHERE student_id = ? AND skill_id = ?;";
 
-    if (sqlite3_prepare_v2(m_db, q_bkt, -1, &m_upsert_bkt, nullptr) != SQLITE_OK) return {StorageError::CONNECTION_ERROR, "Stmt Fail BKT"};
-    if (sqlite3_prepare_v2(m_db, q_mab, -1, &m_upsert_mab, nullptr) != SQLITE_OK) return {StorageError::CONNECTION_ERROR, "Stmt Fail MAB"};
-    if (sqlite3_prepare_v2(m_db, q_log, -1, &m_insert_log, nullptr) != SQLITE_OK) return {StorageError::CONNECTION_ERROR, "Stmt Fail Log"};
+    if (sqlite3_prepare_v2(m_db, q_bkt,  -1, &m_upsert_bkt, nullptr) != SQLITE_OK) return {StorageError::CONNECTION_ERROR, "Stmt Fail BKT"};
+    if (sqlite3_prepare_v2(m_db, q_mab,  -1, &m_upsert_mab, nullptr) != SQLITE_OK) return {StorageError::CONNECTION_ERROR, "Stmt Fail MAB"};
+    if (sqlite3_prepare_v2(m_db, q_log,  -1, &m_insert_log, nullptr) != SQLITE_OK) return {StorageError::CONNECTION_ERROR, "Stmt Fail Log"};
     if (sqlite3_prepare_v2(m_db, q_sbkt, -1, &m_select_bkt, nullptr) != SQLITE_OK) return {StorageError::CONNECTION_ERROR, "Stmt Fail SelBKT"};
     if (sqlite3_prepare_v2(m_db, q_smab, -1, &m_select_mab, nullptr) != SQLITE_OK) return {StorageError::CONNECTION_ERROR, "Stmt Fail SelMAB"};
+
+    // Bug fix #6: preparar statements para persistir la cola SRS.
+    // Si la tabla srs_state no existe (DB v1 sin migrar), prepare devuelve error
+    // y lo ignoramos para no bloquear el inicio — los punteros quedan en nullptr
+    // y los métodos saveSrsState/loadSrsState los comprueban antes de usarlos.
+    const char* q_usrs =
+        "INSERT INTO srs_state (student_id, skill_id, correct_streak, next_review) VALUES (?,?,?,?) "
+        "ON CONFLICT(student_id, skill_id) DO UPDATE SET "
+        "correct_streak=excluded.correct_streak, next_review=excluded.next_review;";
+    const char* q_ssrs = "SELECT skill_id, correct_streak, next_review FROM srs_state WHERE student_id = ?;";
+    sqlite3_prepare_v2(m_db, q_usrs, -1, &m_upsert_srs, nullptr); // fallo silencioso si tabla ausente
+    sqlite3_prepare_v2(m_db, q_ssrs, -1, &m_select_srs, nullptr);
 
     return {StorageError::OK, ""};
 }
@@ -158,6 +180,57 @@ PersistenceResult PersistenceLayer::purgeOldLogs(int months) noexcept {
     }
     
     return {StorageError::OK, ""};
+}
+
+PersistenceResult PersistenceLayer::saveSrsState(int student_id, const srs::SRSQueue& queue) noexcept {
+    // Bug fix #6: persistir toda la cola SRS en una sola transacción.
+    if (!m_upsert_srs) {
+        return {StorageError::CONNECTION_ERROR, "SRS statement not prepared (table missing?)"};
+    }
+
+    const auto& entries = queue.getEntries();
+    if (entries.empty()) return {StorageError::OK, ""};
+
+    sqlite3_exec(m_db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+
+    for (const auto& [skill_id, entry] : entries) {
+        int64_t ts = std::chrono::system_clock::to_time_t(entry.next_review);
+        sqlite3_bind_int(m_upsert_srs,  1, student_id);
+        sqlite3_bind_int(m_upsert_srs,  2, skill_id);
+        sqlite3_bind_int(m_upsert_srs,  3, entry.correct_streak);
+        sqlite3_bind_int64(m_upsert_srs, 4, ts);
+
+        if (sqlite3_step(m_upsert_srs) != SQLITE_DONE) {
+            sqlite3_exec(m_db, "ROLLBACK;", nullptr, nullptr, nullptr);
+            sqlite3_clear_bindings(m_upsert_srs);
+            sqlite3_reset(m_upsert_srs);
+            return {StorageError::WRITE_FAILURE, "SRS upsert failed. Rolled back."};
+        }
+        sqlite3_clear_bindings(m_upsert_srs);
+        sqlite3_reset(m_upsert_srs);
+    }
+
+    sqlite3_exec(m_db, "COMMIT;", nullptr, nullptr, nullptr);
+    return {StorageError::OK, ""};
+}
+
+void PersistenceLayer::loadSrsState(int student_id, srs::SRSQueue& queue) noexcept {
+    // Bug fix #6: restaurar la cola SRS desde la DB al inicio de sesión.
+    if (!m_select_srs) return; // tabla ausente (DB v1 sin migrar) — arranque limpio
+
+    sqlite3_bind_int(m_select_srs, 1, student_id);
+
+    while (sqlite3_step(m_select_srs) == SQLITE_ROW) {
+        srs::SRSEntry entry;
+        entry.skill_id      = sqlite3_column_int(m_select_srs,   0);
+        entry.correct_streak = sqlite3_column_int(m_select_srs,  1);
+        int64_t ts          = sqlite3_column_int64(m_select_srs,  2);
+        entry.next_review   = std::chrono::system_clock::from_time_t(static_cast<std::time_t>(ts));
+        queue.scheduleEntry(entry);
+    }
+
+    sqlite3_clear_bindings(m_select_srs);
+    sqlite3_reset(m_select_srs);
 }
 
 } // namespace hestia::persistence

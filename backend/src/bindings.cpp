@@ -45,7 +45,13 @@ PYBIND11_MODULE(hestia_core, m) {
         .export_values();
 
     py::class_<mab::MABEngine>(m_mab, "MABEngine")
-        .def(py::init<double>(), py::arg("exploration_c") = 1.0);
+        .def(py::init<double>(), py::arg("exploration_c") = 1.0)
+        // Bug fix #2: restaurar historial MAB desde DB al inicio de sesión
+        .def("load_states", [](mab::MABEngine& self,
+                               const std::array<mab::MethodState, 5>& states) {
+             self.loadStates(states);
+         })
+        .def("reset_session", &mab::MABEngine::resetSession);
 
     // Módulo Zone
     py::module_ m_zone = m.def_submodule("zone", "Zone Module");
@@ -83,9 +89,20 @@ PYBIND11_MODULE(hestia_core, m) {
     py::class_<persistence::PersistenceLayer, 
                std::unique_ptr<persistence::PersistenceLayer>>(m_persistence, "PersistenceLayer")
         .def_static("create", &persistence::PersistenceLayer::create)
-        // Ya no atamos init, pero debemos decirle a pybind11 que maneje unique_ptr
         .def("load_skill_state", [](persistence::PersistenceLayer& self, int student_id, int skill_id) {
              return self.loadSkillState(student_id, skill_id);
+         })
+        .def("load_method_states", [](persistence::PersistenceLayer& self, int student_id, int skill_id) {
+             return self.loadMethodStates(student_id, skill_id);
+         })
+        // Bug fix #6: persistir cola SRS entre sesiones
+        .def("save_srs_state", [](persistence::PersistenceLayer& self, int student_id,
+                                   srs::SRSQueue& queue) {
+             return self.saveSrsState(student_id, queue);
+         })
+        .def("load_srs_state", [](persistence::PersistenceLayer& self, int student_id,
+                                   srs::SRSQueue& queue) {
+             self.loadSrsState(student_id, queue);
          });
 
     // Módulo Core

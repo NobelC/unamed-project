@@ -17,13 +17,15 @@ TEST_CASE("SessionManager: Control de ciclo de vida", "[session]") {
         REQUIRE(state.m_pTransition == DEFAULT_P_TRANSITION);
     }
 
-    SECTION("endSession incrementa contador y limpia time_point") {
+    SECTION("endSession incrementa contador y limpia time_points") {
         state.session_count = 5;
         manager.startSession(state);
         manager.endSession(state);
 
         REQUIRE(state.session_count == 6);
         REQUIRE(state.session_start_time.time_since_epoch().count() == 0);
+        // Bug fix #3: endSession también debe limpiar el steady_clock point
+        REQUIRE(state.session_start_time_steady.time_since_epoch().count() == 0);
     }
 }
 
@@ -45,9 +47,10 @@ TEST_CASE("SessionManager: Validacion de tiempo", "[session]") {
         SkillState state;
         manager.startSession(state);
         
-        // Simular un tiempo de inicio en el pasado para no tener que esperar con sleep
-        auto now = std::chrono::system_clock::now();
-        state.session_start_time = now - std::chrono::minutes(5);
+        // Bug fix #3: getSessionElapsedMinutes ahora usa session_start_time_steady.
+        // Manipulamos el campo steady (no el system_clock) para simular 5 minutos pasados
+        // sin tener que esperar con sleep.
+        state.session_start_time_steady = std::chrono::steady_clock::now() - std::chrono::minutes(5);
 
         double elapsed = manager.getSessionElapsedMinutes(state);
         // Permite un pequeño margen por la diferencia de microsegundos en la ejecución

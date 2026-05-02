@@ -4,9 +4,11 @@
 #include <memory>
 #include <optional>
 #include <array>
+#include <vector>
 
 #include "BKTEngine.hpp"
 #include "MABEngine.hpp"
+#include "SRSQueue.hpp"
 
 namespace hestia::persistence {
 
@@ -26,7 +28,7 @@ struct [[nodiscard]] PersistenceResult {
 
 class PersistenceLayer {
 public:
-    static constexpr int CURRENT_VERSION = 1;
+    static constexpr int CURRENT_VERSION = 2; // v2: srs_state table added
     static constexpr size_t METHOD_COUNT = 5;
 
     static std::unique_ptr<PersistenceLayer> create(const std::string& db_path);
@@ -42,6 +44,10 @@ public:
     [[nodiscard]] std::optional<bkt::SkillState> loadSkillState(int student_id, int skill_id) noexcept;
     
     [[nodiscard]] std::array<mab::MethodState, METHOD_COUNT> loadMethodStates(int student_id, int skill_id) noexcept;
+
+    // Bug fix #6: persistencia del estado SRS entre sesiones
+    [[nodiscard]] PersistenceResult saveSrsState(int student_id, const srs::SRSQueue& queue) noexcept;
+    void loadSrsState(int student_id, srs::SRSQueue& queue) noexcept;
     
     [[nodiscard]] PersistenceResult purgeOldLogs(int months_retention) noexcept;
 
@@ -57,6 +63,9 @@ private:
     sqlite3_stmt* m_insert_log = nullptr;
     sqlite3_stmt* m_select_bkt = nullptr;
     sqlite3_stmt* m_select_mab = nullptr;
+    // Bug fix #6: statements para persistir cola SRS
+    sqlite3_stmt* m_upsert_srs = nullptr;
+    sqlite3_stmt* m_select_srs = nullptr;
 };
 
 } // namespace hestia::persistence

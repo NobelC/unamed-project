@@ -4,7 +4,10 @@
 
 namespace hestia::bkt {
   void BKTEngine::updateTransitionDecay(SkillState& state, double lambda) noexcept{
-      std::chrono::duration<double> duration = std::chrono::system_clock::now() - state.session_start_time; 
+      // Bug fix #3: usar steady_clock (monótono) en lugar de system_clock para métricas
+      // intra-sesión. system_clock puede saltar hacia atrás por NTP/cambios de zona horaria,
+      // produciendo una duración negativa y un exponent positivo que hace explotar el decaimiento.
+      std::chrono::duration<double> duration = std::chrono::steady_clock::now() - state.session_start_time_steady;
       using minute_double_cast = std::chrono::duration<double, std::ratio<60>>;
       double minutes_total = std::chrono::duration_cast<minute_double_cast>(duration).count();
       state.m_pTransition = state.m_pTransition * std::exp((-lambda) * minutes_total);
@@ -101,8 +104,15 @@ namespace hestia::bkt {
         state.consecutive_error = 0;
       } 
       else {
-        state.m_pLearn_operative = pL_new;
-        state.m_pLearn_theorical = pL_new_theorical;
+        // Bug fix #5: Lento + Incorrecto → Alta penalización (Sección 3.2, Extensión 4).
+        // Antes, la rama incorrecta aplicaba pL_new directamente sin considerar el tiempo,
+        // dando el mismo resultado a una respuesta rápida-incorrecta y lenta-incorrecta.
+        // Ahora se usa omega como penalización adicional: respuesta lenta incorrecta reduce
+        // más P(G) al bloquear la ganancia de conocimiento más agresivamente.
+        double omega = calculatePenalty(response_time_ms, state.avg_response_time_ms);
+        double omega_theorical = calculatePenaltyTheorical(response_time_ms, state.avg_response_time_ms);
+        state.m_pLearn_operative = state.m_pLearn_operative + (pL_new - state.m_pLearn_operative) * omega;
+        state.m_pLearn_theorical = state.m_pLearn_theorical + (pL_new_theorical - state.m_pLearn_theorical) * omega_theorical;
         state.consecutive_error++;
         state.consecutive_correct = 0;
       }
@@ -114,19 +124,30 @@ namespace hestia::bkt {
           if (state.m_sustained_theorical_dominance >= ANTI_STALL_THRESHOLD) {
               // Desbloqueo: el operativo atrapa al teórico para salir del estancamiento
               state.m_pLearn_operative = state.m_pLearn_theorical;
+              // Bug fix #4: resetear el contador DESPUÉS del desbloqueo para que el
+              // mecanismo anti-stall no se convierta en un bypass permanente.
+              // Sin este reset, si m_pLearn_theorical sigue alto en el siguiente intento,
+              // la condición se cumple otra vez y el operativo se sobreescribe indefinidamente.
+              state.m_sustained_theorical_dominance = 0;
           }
       } else {
           state.m_sustained_theorical_dominance = 0;
       }
 
-      state.last_practice_time = std::chrono::system_clock::now();
+      state.last_practice_time = std::chrono::system_clock::now(); // wall-clock para persistencia
       state.validationProbabilityRanges();
     }
 
     void BKTEngine::applyForgetFactor(SkillState& state) noexcept{
       if(state.exceedsForgetThreshold()){
+        // Bug fix #1: el decaimiento por inactividad debe afectar AMBAS métricas.
+        // Si solo decae m_pLearn_operative, el anti-stall puede desbloquear el siguiente
+        // nivel inmediatamente después de que P(F) reduzca el operativo, porque el teórico
+        // sigue alto y la condición de dominancia se cumple en el primer intento siguiente.
         state.m_pLearn_operative = (state.m_pLearn_operative * (1 - state.m_pForget)) + 
           ((1 - state.m_pLearn_operative) * state.m_pTransition);
+        state.m_pLearn_theorical = (state.m_pLearn_theorical * (1 - state.m_pForget)) +
+          ((1 - state.m_pLearn_theorical) * state.m_pTransition);
       }
       state.validationProbabilityRanges();
     }     

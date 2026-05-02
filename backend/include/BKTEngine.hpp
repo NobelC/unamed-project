@@ -32,8 +32,9 @@ struct SkillState {
     double avg_response_time_ms{0.0};
 
     // Trackeo temporal
-    std::chrono::system_clock::time_point last_practice_time{};
-    std::chrono::system_clock::time_point session_start_time{};
+    std::chrono::system_clock::time_point last_practice_time{};   // wall-clock: persistencia y olvido
+    std::chrono::system_clock::time_point session_start_time{};   // wall-clock: compatibilidad / cleanup
+    std::chrono::steady_clock::time_point session_start_time_steady{}; // Bug fix #3: monótono para decay intra-sesión
 
     uint32_t skill_id;
     uint32_t total_attempts{0};

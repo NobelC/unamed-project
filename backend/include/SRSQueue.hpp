@@ -30,6 +30,12 @@ public:
     /// Verifica si una skill tiene entrada en la cola
     [[nodiscard]] bool hasEntry(int skill_id) const;
 
+    // Bug fix #6: accesores para persistencia
+    /// Retorna todas las entradas de la cola (para guardar en DB)
+    [[nodiscard]] const std::unordered_map<int, SRSEntry>& getEntries() const noexcept { return m_entries; }
+    /// Restaura una entrada ya construida desde la DB (sin recalcular el intervalo)
+    void scheduleEntry(const SRSEntry& entry) { m_entries[entry.skill_id] = entry; }
+
 private:
     std::unordered_map<int, SRSEntry> m_entries;
 
